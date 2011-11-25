@@ -7,14 +7,12 @@ public class UI {
 	World world;
 	FrameBuffer buffer;
 	
-	World colorWorld;
-	FrameBuffer colorBuffer;
-	
 	KeyMapper keyMapper;
 	MouseMapper mouseMapper;
-	SimpleVector lastClicked;
 	
 	int playerID;
+	Object3D highlighted;
+	Object3D lastClicked;
 	
 	UI() {
 		world = new World();
@@ -26,20 +24,10 @@ public class UI {
 		buffer.disableRenderer(IRenderer.RENDERER_SOFTWARE);
 		buffer.enableRenderer(IRenderer.RENDERER_OPENGL);
 		
-		colorWorld = new World();
-		colorWorld.setAmbientLight(255, 255, 255);
-		colorWorld.getCamera().setPosition(5, -5, -5);
-		colorWorld.getCamera().lookAt(new SimpleVector(0.0f, 0.0f, 0.0f));
-		
-		colorBuffer = new FrameBuffer(800, 600, FrameBuffer.SAMPLINGMODE_NORMAL);
-		//colorBuffer.disableRenderer(IRenderer.RENDERER_SOFTWARE); //debug
-		//colorBuffer.enableRenderer(IRenderer.RENDERER_OPENGL);    //debug
-		
 		loadTextures();
 		
 		keyMapper = new KeyMapper();
 		mouseMapper = new MouseMapper(buffer);
-		lastClicked = new SimpleVector();
 	}
 	
 	void draw() {
@@ -48,12 +36,6 @@ public class UI {
 		world.draw(buffer);
 		buffer.update();
 		buffer.displayGLOnly();
-		
-		colorBuffer.clear(java.awt.Color.WHITE);
-		colorWorld.renderScene(colorBuffer);
-		colorWorld.draw(colorBuffer);
-		colorBuffer.update();
-		//colorBuffer.displayGLOnly(); //debug
 	}
 	
 	void addPlayerObject(float x, float y, float z) {
@@ -63,6 +45,7 @@ public class UI {
 		t.recreateTextureCoords();
 		t.build();
 		t.translate(x, y, z);
+		t.setSelectable(Object3D.MOUSE_UNSELECTABLE);
 		playerID = world.addObject(t);
 	}
 	
@@ -84,30 +67,14 @@ public class UI {
 		t.build();
 		t.rotateY((float)(Math.PI/4));
 		t.translate(x, y, z);
-		int c = world.addObject(t);
-		
-		Object3D t2 = Primitives.getCube(0.5f);
-		TextureManager.getInstance().addTexture(String.valueOf(c),
-				new Texture(1, 1, new java.awt.Color(c)));
-		t2.setTexture(String.valueOf(c));
-		t2.build();
-		t2.rotateY((float)(Math.PI/4));
-		t2.translate(x, y, z);
-		colorWorld.addObject(t2);
-		//t2.translate(x, y-1, z);
-		//world.addObject(t2);
+		world.addObject(t);
 	}
 	
 	void updateCamera() {
 		world.getCamera().setPositionToCenter(world.getObject(playerID));
-		world.getCamera().moveCamera(Camera.CAMERA_MOVEOUT, 3);
+		world.getCamera().moveCamera(Camera.CAMERA_MOVEOUT, 7);
 		//world.getCamera().setPosition(player.x-1, player.y-2, player.z-1);
 		world.getCamera().lookAt(
-				world.getObject(playerID).getTransformedCenter());
-		
-		colorWorld.getCamera().setPositionToCenter(world.getObject(playerID));
-		colorWorld.getCamera().moveCamera(Camera.CAMERA_MOVEOUT, 3);
-		colorWorld.getCamera().lookAt(
 				world.getObject(playerID).getTransformedCenter());
 	}
 	
@@ -122,77 +89,64 @@ public class UI {
 				new java.awt.Color(255, 255, 0)));
 	}
 
-	boolean[] commands = new boolean[4];
-	boolean[] getCommands() {
+	boolean leftPressed = false;
+	boolean rightPressed = false;
+	boolean upPressed = false;
+	boolean downPressed = false;
+	void getCommands() {
 		KeyState ks = null;
 		while((ks = keyMapper.poll()) != KeyState.NONE) {
 			if(ks.getKeyCode() == KeyEvent.VK_UP)
-				commands[0] = ks.getState();
+				upPressed = ks.getState();
 			if(ks.getKeyCode() == KeyEvent.VK_LEFT)
-				commands[1] = ks.getState();
+				leftPressed = ks.getState();
 			if(ks.getKeyCode() == KeyEvent.VK_DOWN)
-				commands[2] = ks.getState();
+				downPressed = ks.getState();
 			if(ks.getKeyCode() == KeyEvent.VK_RIGHT)
-				commands[3] = ks.getState();
+				rightPressed = ks.getState();
 		}
-		return commands;
 	}
 	
-	int highlighted = -1;
-	Object3D obj = null;
-	void highlightHovered() {
-		//if(!mouseMapper.buttonDown(1)) return;
+	void highlight() {
+		if(highlighted != null) {
+			highlighted.setTexture("highlight");
+		}
+	}
+	
+	void unhighlight() {
+		if(highlighted != null) {
+			highlighted.setTexture("stones");
+		}
+	}
+	
+	void rayCast() {
 		int x = mouseMapper.getMouseX();
 		int y = mouseMapper.getMouseY();
-		
-		int c = colorBuffer.getPixels()[x+buffer.getOutputWidth()*y];
-		//int c = buffer.getPixels()[x+buffer.getOutputWidth()*y];
-		c &= 0x00FFFFFF;
-		//System.out.printf("%x\n", c);
-		if(highlighted >= 0) {
-			unhighlight(highlighted);
-		}
-		if(c >= 0 && c != 0xffffff) {
-			highlight(c+1);
-		}
-	}
-	
-	void highlight(int c) {
-		Object3D o = world.getObject(c);
-		if(o != null) {
-			//o.rotateZ((float)(Math.PI/2));
-			//o.scale(2.0f);
-			o.setTexture("highlight");
-			highlighted = c;
-			obj = o;
-		} else {
-			highlighted = -1;
-			obj = null;
-		}
-	}
-	
-	void unhighlight(int c) {
-		Object3D o = world.getObject(c);
-		//o.rotateZ(-(float)(Math.PI/2));
-		//o.scale(0.5f);
-		o.setTexture("stones");
-	}
-	
-	SimpleVector getClick() {
+		SimpleVector dr = Interact2D.reproject2D3D(world.getCamera(), buffer, x, y);
+		int id = Interact2D.getObjectID(Interact2D.pickPolygon(world.getVisibilityList(), dr, Interact2D.EXCLUDE_NOT_SELECTABLE));
+		unhighlight();
+		highlighted = world.getObject(id);
 		if(mouseMapper.buttonDown(1)) {
-			if(obj != null) {
-				lastClicked = obj.getTransformedCenter();
-			}
+			lastClicked = highlighted;
 		}
-		return lastClicked;
+		highlight();
+	}
+	
+	void processMouse() {
+		rayCast();
+	}
+	
+	SimpleVector getClicked() {
+		if(lastClicked != null) {
+			return lastClicked.getTransformedCenter();
+		} else {
+			return null;
+		}
 	}
 	
 	void shutdown() {
 		buffer.disableRenderer(IRenderer.RENDERER_OPENGL);
 		buffer.dispose();
-		
-		colorBuffer.disableRenderer(IRenderer.RENDERER_SOFTWARE);
-		colorBuffer.dispose();
 	}
 	
 	private static class MouseMapper {

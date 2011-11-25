@@ -23,9 +23,9 @@ public class Player {
 	SimpleVector move() {
 		SimpleVector dis = new SimpleVector(dest);
 		dis.sub(loc);
-		if(dis.length() > 0.01) {
+		if(dis.length() > 0.05) {
 			dis.scalarMul(1/dis.length());
-			dis.scalarMul(0.01f);
+			dis.scalarMul(0.05f);
 			move(dis.x, dis.y, dis.z);
 		} else {
 			dis.set(0, 0, 0);

@@ -7,7 +7,6 @@ public class Client {
 	Player player;
 	Timer t;
 	int playerID;
-	float vx, vy, vz;
 	
 	Client() {
 		ui = new UI();
@@ -20,9 +19,11 @@ public class Client {
 		t.schedule(new AnimationTask(), 10, 10);
 		while(!org.lwjgl.opengl.Display.isCloseRequested()) {
 			ui.draw();
-			ui.highlightHovered();
-			SimpleVector click = ui.getClick();
-			player.setDest(click);
+			ui.processMouse();
+			SimpleVector dest = ui.getClicked();
+			if(dest != null) {
+				player.setDest(dest);
+			}
 			Thread.sleep(10);
 		}
 		
@@ -30,18 +31,8 @@ public class Client {
 		ui.shutdown();
 	}
 	
-	void getArrows() {
-		boolean[] commands;
-		vx = vy = vz = 0.0f;
-		commands = ui.getCommands();
-		if(commands[0] == true)
-			vx = 1.0f;
-		if(commands[1] == true)
-			vz = 1.0f;
-		if(commands[2] == true)
-			vx = -1.0f;
-		if(commands[3] == true)
-			vz = -1.0f;
+	void getKeyCommands() {
+		ui.getCommands();
 	}
 	
 	void addPlayer(float x, float y, float z) {
@@ -73,7 +64,7 @@ public class Client {
 	
 	private class AnimationTask extends TimerTask {
 		public void run() {
-			//getArrows();
+			getKeyCommands();
 			movePlayer();
 		}
 	}
